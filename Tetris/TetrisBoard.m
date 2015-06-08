@@ -60,8 +60,8 @@
 }
 
 - (BOOL)occupiedRow:(uint16_t)y column:(uint16_t)x {
-  NSParameterAssert(y < self.height && y >= 0);
-  NSParameterAssert(x < self.width && x >= 0);
+  if (y >= self.height || y < 0) return YES;
+  if (x >= self.width || x < 0) return YES;
 
   return [self.blocks[y][x] boolValue];
 }
