@@ -8,8 +8,6 @@
 
 #import "AppDelegate.h"
 
-#import "TetrisGame.h"
-
 @interface AppDelegate ()
 
 @property (weak) IBOutlet NSWindow *window;
@@ -18,7 +16,6 @@
 @implementation AppDelegate
 
 - (void)applicationDidFinishLaunching:(NSNotification *)aNotification {
-  TetrisGame *t = [[TetrisGame alloc] initWithWidth:10 height:18];
 }
 
 - (void)applicationWillTerminate:(NSNotification *)aNotification {

@@ -6,17 +6,15 @@
 //  The Frames Per Second to play at. This has no real effect on
 //  when the blocks fall down, it merely affects how often the tick
 //  method is run.
-static const uint16_t FPS = 2;
+static const uint16_t FPS = 30;
 
-static const float SPEED_START = 0.6;
+static const float SPEED_START = 1.0;
 static const float SPEED_DECRE = 0.005;
-static const float SPEED_MIN = 0.1;
+static const float SPEED_MIN = 0.4;
 
-typedef enum : NSUInteger {
-  DOWN,
-  LEFT,
-  RIGHT,
-} DIR;
+static const NSSize fieldSize = {10, 18};
+
+typedef enum { dLeft, dRight, dDown } Direction;
 
 @interface TetrisGame ()
 
@@ -30,7 +28,7 @@ typedef enum : NSUInteger {
 @property Tetromino *currentPiece;
 @property Tetromino *nextPiece;
 
-@property uint64_t ticks;
+@property float speed;
 @property float step;
 
 /// The current number of completed rows
@@ -39,69 +37,127 @@ typedef enum : NSUInteger {
 /// The repeating timer which calls |tick| to maintain FPS.
 @property NSTimer *gameTimer;
 
-
-@property uint16_t height;
-@property uint16_t width;
-
 @end
 
 @implementation TetrisGame
 
-- (instancetype)initWithWidth:(uint16_t)width height:(uint16_t)height {
-  self = [super init];
-  if (self) {
-    _width = width;
-    _height = height;
+- (void)drawRect:(NSRect)dirtyRect {
+  [super drawRect:dirtyRect];
 
-    _step = SPEED_START * 100;
+  void (^actionBlock)(int, int) = ^void(int x, int y) {
+      float cellWidth = self.bounds.size.width / fieldSize.width;
+      float cellHeight = self.bounds.size.height / fieldSize.height;
+      NSBezierPath *p = [NSBezierPath bezierPathWithRect:NSMakeRect(x * cellWidth,
+                                                                    y * cellHeight,
+                                                                    cellWidth - 1,
+                                                                    cellHeight - 1)];
+      [p fill];
+      //[p stroke];
+  };
 
-    _board = [[TetrisBoard alloc] initWithWidth:width height:height];
 
-    [self newPiece];
-
-    _gameTimer = [NSTimer timerWithTimeInterval:(1.0f / FPS)
-                                         target:self
-                                       selector:@selector(tick)
-                                       userInfo:nil
-                                        repeats:YES];
-    [[NSRunLoop currentRunLoop] addTimer:_gameTimer forMode:NSDefaultRunLoopMode];
+  // Draw the placed pieces
+  for (int y = 0; y < fieldSize.height; y++) {
+    for (int x = 0; x < fieldSize.width; x++) {
+      if ([self.board occupiedPoint:NSMakePoint(x, y)]) actionBlock(x, y);
+    }
   }
-  return self;
+
+  // Draw the current piece
+  int x = floor(self.piecePoint.x), y = floor(self.piecePoint.y);
+  for (int i = 0; i <= 3; i++) {
+    uint16_t shape = [self.currentPiece shape] >> (12 - 4 * i);
+    if (shape & 0x8) actionBlock(x, y + i);
+    if (shape & 0x4) actionBlock(x + 1, y + i);
+    if (shape & 0x2) actionBlock(x + 2, y + i);
+    if (shape & 0x1) actionBlock(x + 3, y + i);
+  }
+}
+
+- (void)viewWillMoveToWindow:(NSWindow *)newWindow {
+  _board = [[TetrisBoard alloc] initWithSize:fieldSize];
+
+  _speed = SPEED_START;
+
+  [self newPiece];
+
+  _gameTimer = [NSTimer timerWithTimeInterval:(1.0f / FPS)
+                                       target:self
+                                     selector:@selector(tick)
+                                     userInfo:nil
+                                      repeats:YES];
+  [[NSRunLoop currentRunLoop] addTimer:_gameTimer forMode:NSDefaultRunLoopMode];
 }
 
 - (void)tick {
-  [self drop];
+  self.step++;
+  if (self.step / FPS >= self.speed) {
+    self.step = 0;
+    self.speed -= SPEED_DECRE;
+    if (self.speed < SPEED_MIN) self.speed = SPEED_MIN;
+    [self drop];
+  }
+
+  [self setNeedsDisplay:YES];
 }
+
+- (BOOL)isFlipped { return YES; }
+
+- (BOOL)acceptsFirstResponder { return YES; }
 
 - (void)newPiece {
   if (!self.nextPiece) self.nextPiece = [Tetromino nextTetromino];
   self.currentPiece = self.nextPiece;
-  self.piecePoint = NSMakePoint(self.width / 2 - 2, 0);
-  if (![self canMovePieceToRow:self.piecePoint.y column:self.piecePoint.x]) {
+  self.piecePoint = NSMakePoint(fieldSize.width / 2 - 2, 0);
+  if (![self canMovePieceToPoint:self.piecePoint place:NO]) {
     NSLog(@"YOU LOSE");
     [_gameTimer invalidate];
   }
   self.nextPiece = [Tetromino nextTetromino];
 }
 
+- (IBAction)moveUp:(id)sender {
+  [self.currentPiece rotate];
+
+  // Check that the new rotation fits. If it doesn't fit because of the edges, try and move
+  // it until it does fit. If it doesn't fit for any other reason, or moving doesn't help,
+  // undo the rotation.
+  NSPoint originalPoint = self.piecePoint;
+  while (![self canMovePieceToPoint:self.piecePoint place:NO]) {
+    if (self.piecePoint.x < 3) {
+      self.piecePoint = NSMakePoint(self.piecePoint.x + 1, self.piecePoint.y);
+    } else if (self.piecePoint.x > fieldSize.width - 3) {
+      self.piecePoint = NSMakePoint(self.piecePoint.x - 1, self.piecePoint.y);
+    } else {
+      [self.currentPiece rotateBack];
+      self.piecePoint = originalPoint;
+      break;
+    }
+  }
+}
+- (IBAction)moveLeft:(id)sender  { [self move:dLeft]; }
+- (IBAction)moveRight:(id)sender { [self move:dRight]; }
+- (IBAction)moveDown:(id)sender  { [self move:dDown]; }
+
 - (void)drop {
-  if (![self move:DOWN]) {
-    [self placePiece];
-    NSLog(@"%@", self.board);
+  if (![self move:dDown]) {
+    [self canMovePieceToPoint:self.piecePoint place:YES];
+    self.completedRows += [self.board clearCompleteRows];
+    NSLog(@"%d", self.completedRows);
     [self newPiece];
   }
 }
 
-- (BOOL)move:(DIR)direction {
+- (BOOL)move:(Direction)direction {
   NSPoint newPoint = NSMakePoint(self.piecePoint.x, self.piecePoint.y);
 
   switch (direction) {
-    case DOWN: newPoint.y = newPoint.y + 1; break;
-    case LEFT: newPoint.x = newPoint.x - 1; break;
-    case RIGHT: newPoint.x = newPoint.x + 1; break;
+    case dDown: newPoint.y = newPoint.y + 1; break;
+    case dLeft: newPoint.x = newPoint.x - 1; break;
+    case dRight: newPoint.x = newPoint.x + 1; break;
   }
 
-  if ([self canMovePieceToRow:newPoint.y column:newPoint.x]) {
+  if ([self canMovePieceToPoint:newPoint place:NO]) {
     self.piecePoint = newPoint;
     return YES;
   } else {
@@ -109,35 +165,26 @@ typedef enum : NSUInteger {
   }
 }
 
-- (void)placePiece {
-  uint16_t shape = [self.currentPiece shape];
+- (BOOL)canMovePieceToPoint:(NSPoint)point place:(BOOL)place {
+  int x = floor(point.x), y = floor(point.y);
 
-  for (int i = 0; i < 3; i++) {
-    uint16_t sshape = shape >> (12 - 4 * i);
-    if (sshape & 0x8) [self.board occupyRow:self.piecePoint.y + i column:self.piecePoint.x + 1];
-    if (sshape & 0x4) [self.board occupyRow:self.piecePoint.y + i column:self.piecePoint.x + 2];
-    if (sshape & 0x2) [self.board occupyRow:self.piecePoint.y + i column:self.piecePoint.x + 3];
-    if (sshape & 0x1) [self.board occupyRow:self.piecePoint.y + i column:self.piecePoint.x + 4];
-  }
+  int row = 0, col = 0;
+  for (int i = 0x8000; i > 0; i = i >> 1) {
+    if ([self.currentPiece shape] & i) {
+      if (place) {
+        [self.board occupyPoint:NSMakePoint(x + col, y + row)];
+      } else {
+        if ([self.board occupiedPoint:NSMakePoint(x + col, y + row)]) return NO;
+      }
+    }
 
-  self.completedRows += [self.board clearCompleteRows];
-}
-
-- (BOOL)canMovePieceToRow:(uint16_t)y column:(uint16_t)x {
-  if (x < 0 || x >= self.width - 1 || y < 0 || y >= self.height - 1) return NO;
-
-  uint16_t shape = [self.currentPiece shape];
-
-  for (int i = 0; i < 3; i++) {
-    uint16_t sshape = shape >> (12 - 4 * i);
-    if (sshape & 0x8 && [self.board occupiedRow:y + i column:x + 1]) return NO;
-    if (sshape & 0x4 && [self.board occupiedRow:y + i column:x + 2]) return NO;
-    if (sshape & 0x2 && [self.board occupiedRow:y + i column:x + 3]) return NO;
-    if (sshape & 0x1 && [self.board occupiedRow:y + i column:x + 4]) return NO;
+    if (++col == 4) {
+      col = 0;
+      ++row;
+    }
   }
 
   return YES;
 }
-
 
 @end

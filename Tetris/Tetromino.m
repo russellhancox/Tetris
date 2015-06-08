@@ -61,6 +61,7 @@ const uint64_t SHAPES_Z = 0x0C604C80C6002640;
   int pieceNumber = arc4random_uniform((unsigned int)piecesBag.count);
   Tetromino *t = piecesBag[pieceNumber];
   [piecesBag removeObjectAtIndex:pieceNumber];
+
   return t;
 }
 
@@ -99,7 +100,17 @@ const uint64_t SHAPES_Z = 0x0C604C80C6002640;
   if (self.currentRotation + 1 > TWO_SEVENTY) {
     self.currentRotation = ZERO;
   } else {
-    self.currentRotation = self.currentRotation + 1;
+    self.currentRotation++;
+  }
+
+  return [self shape];
+}
+
+- (uint16_t)rotateBack {
+  if (self.currentRotation == ZERO) {
+    self.currentRotation = TWO_SEVENTY;
+  } else {
+    self.currentRotation--;
   }
 
   return [self shape];

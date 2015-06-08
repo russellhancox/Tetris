@@ -23,4 +23,7 @@
 ///  Rotate this Tetromino and return the new shape as defined above.
 - (uint16_t)rotate;
 
+///  Rotate counter-clockwise and return the new shape.
+- (uint16_t)rotateBack;
+
 @end

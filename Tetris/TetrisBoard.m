@@ -20,19 +20,19 @@
 
 @implementation TetrisBoard
 
-- (instancetype)initWithWidth:(uint16_t)width height:(uint16_t)height {
+- (instancetype)initWithSize:(NSSize)size {
   self = [super init];
   if (self) {
-    _width = width;
-    _height = height;
+    _width = floor(size.width);
+    _height = floor(size.height);
 
-    _emptyRow = [NSMutableArray arrayWithCapacity:width];
-    for (int x = 0; x < width; x++) {
+    _emptyRow = [NSMutableArray arrayWithCapacity:_width];
+    for (int x = 0; x < _width; x++) {
       [_emptyRow addObject:@NO];
     }
 
-    _blocks = [NSMutableArray arrayWithCapacity:height];
-    for (int y = 0; y < height; y++) {
+    _blocks = [NSMutableArray arrayWithCapacity:_height];
+    for (int y = 0; y < _height; y++) {
       [_blocks addObject:[_emptyRow mutableCopy]];
     }
   }
@@ -44,7 +44,7 @@
 
   for (int y = 0; y < self.height; y++) {
     for (int x = 0; x < self.width; x++) {
-      [self occupiedRow:y column:x] ? [s appendString:@"*"] : [s appendString:@"-"];
+      [self occupiedPoint:NSMakePoint(x, y)] ? [s appendString:@"*"] : [s appendString:@"-"];
     }
     [s appendString:@"\n"];
   }
@@ -52,14 +52,18 @@
   return s;
 }
 
-- (void)occupyRow:(uint16_t)y column:(uint16_t)x {
+- (void)occupyPoint:(NSPoint)point {
+  int x = floor(point.x), y = floor(point.y);
+
   NSParameterAssert(y < self.height && y >= 0);
   NSParameterAssert(x < self.width && x >= 0);
 
   self.blocks[y][x] = @YES;
 }
 
-- (BOOL)occupiedRow:(uint16_t)y column:(uint16_t)x {
+- (BOOL)occupiedPoint:(NSPoint)point {
+  int x = floor(point.x), y = floor(point.y);
+
   if (y >= self.height || y < 0) return YES;
   if (x >= self.width || x < 0) return YES;
 
@@ -75,7 +79,7 @@
 
     // Loop through the columns of the current row, looking for an unoccupied cell.
     for (int x = 0; x < self.width; ++x) {
-      if (! [self occupiedRow:y column:x]) rowComplete = NO;
+      if (! [self occupiedPoint:NSMakePoint(x, y)]) rowComplete = NO;
     }
 
     // The current row is complete, remove it and then re-check the same line
