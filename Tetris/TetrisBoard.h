@@ -1,5 +1,9 @@
 @import Foundation;
 
+///
+///  Represents a Tetris 'board', capable of storing pieces that have been placed.
+///  A board has a size, which the pieces must always fit within.
+///
 @interface TetrisBoard : NSObject
 
 ///  Designated initializer.

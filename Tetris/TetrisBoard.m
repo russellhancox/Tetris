@@ -5,16 +5,9 @@
 @property(readonly) uint16_t width;
 @property(readonly) uint16_t height;
 
-///  Empty row is a mutable array containing @NO objects representing empty cells on
-///  the board, with one object per column. This is used to initialize the board and
-///  to replace the top row when another row is removed due to being complete.
-@property NSMutableArray *emptyRow;
-
 ///  Blocks represents the blocks of the board that have a "stored" piece in.
-///  It's actually a mutable array of mutable arrays, one for each row, with
-///  index 0 being the top of the board and index self.height-1 being the bottom.
-///  Each subarray goes from left to right.
-@property NSMutableArray *blocks;
+///  The value doesn't matter so we're using @YES.
+@property NSMutableDictionary *blocks;
 
 @end
 
@@ -26,15 +19,7 @@
     _width = floor(size.width);
     _height = floor(size.height);
 
-    _emptyRow = [NSMutableArray arrayWithCapacity:_width];
-    for (int x = 0; x < _width; x++) {
-      [_emptyRow addObject:@NO];
-    }
-
-    _blocks = [NSMutableArray arrayWithCapacity:_height];
-    for (int y = 0; y < _height; y++) {
-      [_blocks addObject:[_emptyRow mutableCopy]];
-    }
+    _blocks = [NSMutableDictionary dictionaryWithCapacity:_width * _height];
   }
   return self;
 }
@@ -58,7 +43,7 @@
   NSParameterAssert(y < self.height && y >= 0);
   NSParameterAssert(x < self.width && x >= 0);
 
-  self.blocks[y][x] = @YES;
+  self.blocks[[NSValue valueWithPoint:point]] = @YES;
 }
 
 - (BOOL)occupiedPoint:(NSPoint)point {
@@ -67,7 +52,7 @@
   if (y >= self.height || y < 0) return YES;
   if (x >= self.width || x < 0) return YES;
 
-  return [self.blocks[y][x] boolValue];
+  return (self.blocks[[NSValue valueWithPoint:point]] != nil);
 }
 
 - (uint16_t)clearCompleteRows {
@@ -98,14 +83,17 @@
   NSParameterAssert(row < self.height && row >= 0);
 
   // Loop through the lines beginning at the cleared row and working upwards,
-  // replacing the contents of every cell with the cell above it. If the row is
-  // the top of the board, instead replace the whole row with self.emptyRow.
+  // replacing the contents of every cell with the cell above it.
   for (int y = row; y >= 0; --y) {
-    if (y == 0) {
-      self.blocks[y] = [self.emptyRow mutableCopy];
-    } else {
-      for (int x = 0; x < self.width; ++x) {
-        self.blocks[y][x] = self.blocks[y-1][x];
+    for (int x = 0; x < self.width; ++x) {
+      // p1 == current point, p2 == point above p1
+      NSPoint p1 = NSMakePoint(x, y), p2 = NSMakePoint(x, y - 1);
+
+      if (y > 0 && self.blocks[[NSValue valueWithPoint:p2]]) {
+        [self.blocks removeObjectForKey:[NSValue valueWithPoint:p2]];
+        self.blocks[[NSValue valueWithPoint:p1]] = @YES;
+      } else {
+        [self.blocks removeObjectForKey:[NSValue valueWithPoint:p1]];
       }
     }
   }
